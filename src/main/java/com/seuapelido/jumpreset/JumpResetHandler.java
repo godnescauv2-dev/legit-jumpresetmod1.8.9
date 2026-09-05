@@ -7,52 +7,61 @@ import net.minecraftforge.fml.common.eventhandler.SubscribeEvent;
 import net.minecraftforge.fml.common.gameevent.TickEvent;
 import net.minecraftforge.fml.relauncher.Side;
 import net.minecraftforge.fml.relauncher.SideOnly;
+import org.lwjgl.input.Keyboard;
 
 public class JumpResetHandler {
 
     private final Minecraft mc = Minecraft.getMinecraft();
 
-    // Estado do modulo
     private boolean enabled = false;
-    private int jumpTicks = 0;
+
+    // Controla o estado do hit pra dar UM pulo so
+    private boolean wasHurt = false;   // hit "ativo" (com dano recente)
+    private boolean jumpedThisHit = false; // ja deu o pulo desse hit
 
     @SubscribeEvent
     @SideOnly(Side.CLIENT)
     public void onClientTick(TickEvent.ClientTickEvent event) {
         if (event.phase != TickEvent.Phase.END) return;
 
-        // R apertado = liga/desliga
-        if (JumpResetMod.toggleKey.isPressed()) {
+        if (JumpResetMod.toggleKey != null && JumpResetMod.toggleKey.isPressed()) {
             enabled = !enabled;
         }
 
         EntityPlayer p = mc.thePlayer;
         if (p == null || mc.theWorld == null) return;
 
+        int jumpKey = mc.gameSettings.keyBindJump.getKeyCode();
+
         if (!enabled) {
-            releaseJump();
+            releaseIfNotHeld(jumpKey);
             return;
         }
 
-        // Se tomou dano (hurtResistantTime > 0) estando no chao,
-        // dispara o pulo nos proximos ticks para negar o knockback.
-        if (p.onGround && p.hurtResistantTime > 0) {
-            jumpTicks = 2;
+        boolean isHurtNow = p.hurtTime > 0;   // animacao de dano = hit acabou de acontecer
+
+        // 1) Detecta que um hit NOVO comecou
+        if (isHurtNow && !wasHurt) {
+            jumpedThisHit = false;   // arma pra dar o pulo de reset
+        }
+        wasHurt = isHurtNow;
+
+        // 2) Deu o dano, estamos no chao e ainda nao resetamos -> UM pulo
+        if (isHurtNow && p.onGround && !jumpedThisHit) {
+            jumpedThisHit = true;
+            KeyBinding.setKeyBindState(jumpKey, true); // pulo unico
         }
 
-        if (jumpTicks > 0) {
-            KeyBinding.setKeyBindState(
-                mc.gameSettings.keyBindJump.getKeyCode(), true);
-            jumpTicks--;
-        } else {
-            releaseJump();
+        // 3) Limpeza: hit terminou -> libera pro proximo hit
+        if (!isHurtNow) {
+            releaseIfNotHeld(jumpKey);
         }
     }
 
-    private void releaseJump() {
-        if (mc.thePlayer != null) {
-            KeyBinding.setKeyBindState(
-                mc.gameSettings.keyBindJump.getKeyCode(), false);
+    private void releaseIfNotHeld(int jumpKey) {
+        // Nunca "briga" com a tecla fisica: se o dedo esta segurando, deixa pular continuo
+        if (jumpKey >= 0 && !Keyboard.isKeyDown(jumpKey)) {
+            KeyBinding.setKeyBindState(jumpKey, false);
         }
     }
 }
