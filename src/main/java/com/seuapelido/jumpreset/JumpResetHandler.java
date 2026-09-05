@@ -14,10 +14,12 @@ public class JumpResetHandler {
     private final Minecraft mc = Minecraft.getMinecraft();
 
     private boolean enabled = false;
+    private boolean wasHurt = false;
+    private boolean resetThisHit = false;
 
-    // Controla o estado do hit pra dar UM pulo so
-    private boolean wasHurt = false;   // hit "ativo" (com dano recente)
-    private boolean jumpedThisHit = false; // ja deu o pulo desse hit
+    // Quanto do KB horizontal vai sobrar.
+    // 0.1 = bloqueia 90% (sobra 10%). 0.0 = bloqueia 100%. 0.5 = bloqueia 50%.
+    private static final double KB_REMAINING = 0.1D;
 
     @SubscribeEvent
     @SideOnly(Side.CLIENT)
@@ -31,37 +33,40 @@ public class JumpResetHandler {
         EntityPlayer p = mc.thePlayer;
         if (p == null || mc.theWorld == null) return;
 
-        int jumpKey = mc.gameSettings.keyBindJump.getKeyCode();
+        if (!enabled) return;
 
-        if (!enabled) {
-            releaseIfNotHeld(jumpKey);
-            return;
-        }
+        boolean isHurtNow = p.hurtTime > 0;
 
-        boolean isHurtNow = p.hurtTime > 0;   // animacao de dano = hit acabou de acontecer
-
-        // 1) Detecta que um hit NOVO comecou
         if (isHurtNow && !wasHurt) {
-            jumpedThisHit = false;   // arma pra dar o pulo de reset
+            resetThisHit = false;
         }
         wasHurt = isHurtNow;
 
-        // 2) Deu o dano, estamos no chao e ainda nao resetamos -> UM pulo
-        if (isHurtNow && p.onGround && !jumpedThisHit) {
-            jumpedThisHit = true;
-            KeyBinding.setKeyBindState(jumpKey, true); // pulo unico
-        }
+        if (!isHurtNow || resetThisHit) return;
 
-        // 3) Limpeza: hit terminou -> libera pro proximo hit
-        if (!isHurtNow) {
-            releaseIfNotHeld(jumpKey);
+        if (isBeingKnocked(p)) {
+            resetThisHit = true;
+
+            // 90% do KB horizontal cortado (sobra 10%)
+            p.motionX *= KB_REMAINING;
+            p.motionZ *= KB_REMAINING;
+
+            // Reset/pulo pra quebrar o resto do impulso vertical
+            if (p.onGround) {
+                p.jump();
+            } else {
+                double vy = p.motionY;
+                if (vy < 0.42D) {
+                    p.motionY = Math.max(vy, 0.42D);
+                }
+            }
         }
     }
 
-    private void releaseIfNotHeld(int jumpKey) {
-        // Nunca "briga" com a tecla fisica: se o dedo esta segurando, deixa pular continuo
-        if (jumpKey >= 0 && !Keyboard.isKeyDown(jumpKey)) {
-            KeyBinding.setKeyBindState(jumpKey, false);
-        }
+    private boolean isBeingKnocked(EntityPlayer p) {
+        double hSpeed = Math.sqrt(p.motionX * p.motionX + p.motionZ * p.motionZ);
+        boolean movingByKnockback = hSpeed > 0.01D;
+        boolean falling = p.motionY < -0.1D && !p.onGround;
+        return movingByKnockback || falling;
     }
 }
