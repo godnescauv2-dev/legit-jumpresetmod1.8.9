@@ -1,0 +1,8 @@
+[{
+  "modid": "jumpreset",
+  "name": "JumpReset-v1",
+  "description": "Modulo de auto jump-reset legit para pvp.",
+  "version": "${version}",
+  "mcversion": "${mcversion}",
+  "authors": ["HenriqueCheats"]
+}]
