@@ -11,52 +11,42 @@ public class JumpResetHandler {
 
     private final Minecraft mc = Minecraft.getMinecraft();
 
-    private boolean enabled = false;
-    private boolean wasHurt = false;
-    private boolean resetThisHit = false;
-
-    // 0.1 = bloqueia 90% do KB horizontal
-    private static final double KB_REMAINING = 0.1D;
+    private boolean wasHurt = false;     // hit "ativo" (dano recente)
+    private boolean jumpedThisHit = false; // ja deu o pulo desse hit
 
     @SubscribeEvent
     @SideOnly(Side.CLIENT)
     public void onClientTick(TickEvent.ClientTickEvent event) {
         if (event.phase != TickEvent.Phase.END) return;
 
-        if (JumpResetMod.toggleKey != null && JumpResetMod.toggleKey.isPressed()) {
-            enabled = !enabled;
-        }
-
         EntityPlayer p = mc.thePlayer;
         if (p == null || mc.theWorld == null) return;
 
-        if (!enabled) return;
+        // Modulo desligado? Nao faz nada
+        if (!JumpResetMod.isEnabled()) {
+            wasHurt = false;
+            jumpedThisHit = false;
+            return;
+        }
 
         boolean isHurtNow = p.hurtTime > 0;
 
+        // 1) Novo hit detectado -> arma o pulo
         if (isHurtNow && !wasHurt) {
-            resetThisHit = false;
+            jumpedThisHit = false;
         }
         wasHurt = isHurtNow;
 
-        if (!isHurtNow || resetThisHit) return;
+        // 2) Pulo unico no chao, no inicio do hit
+        //    (a reducao de KB agora e 100% responsabilidade do Mixin)
+        if (isHurtNow && p.onGround && !jumpedThisHit) {
+            jumpedThisHit = true;
+            p.jump(); // pulo legitimo vanilla, sem mexer em motion manual
+        }
 
-        if (p.onGround) {
-            // Chão: pulo legítimo + corte do KB horizontal
-            resetThisHit = true;
-            double mx = p.motionX;
-            double mz = p.motionZ;
-            p.jump();
-            // Corta o KB, mas SEM zerar o motion do proprio pulo
-            p.motionX = mx * KB_REMAINING + p.motionX * 0.0D;
-            p.motionZ = mz * KB_REMAINING;
-            // p.jump() so seta motionY, entao motionX/Z aqui sao os pre-jump
-        } else {
-            // Ar: NUNCA seta motionY pra cima (setback garantido).
-            // Apenas corta o horizontal, mantendo motionY intacto.
-            resetThisHit = true;
-            p.motionX *= KB_REMAINING;
-            p.motionZ *= KB_REMAINING;
+        // 3) Hit terminou -> libera pro proximo
+        if (!isHurtNow) {
+            jumpedThisHit = false;
         }
     }
 }
