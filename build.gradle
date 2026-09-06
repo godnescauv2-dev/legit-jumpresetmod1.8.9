@@ -43,19 +43,6 @@ mixin {
     add sourceSets.main, 'mixins.jumpreset.refmap.json'
 }
 
-// Registra o Mixin AP (gera o refmap na compilacao)
-configurations {
-    annotationProcessor
-}
-dependencies {
-    annotationProcessor('org.spongepowered:mixin:0.7.11-SNAPSHOT') {
-        exclude module: 'commons-io'
-    }
-}
-compileJava {
-    options.annotationProcessorPath = configurations.annotationProcessor
-}
-
 processResources {
     inputs.property 'version', project.version
     inputs.property 'mcversion', project.minecraft.version
